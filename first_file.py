@@ -1,15 +1,19 @@
 # the goal is to store items as images, url links...
+# use a neural network...
 # then long term I want the system to be able to generate an outfit based on certain tags
 # tags like winter, summer, fall/autumn, spring, color, warm-light, cool-light, dress, pants, business professional, smart business, etc
 # I'll have to store clothing 
 
-class Clothing_Article:
+import pandas as pd
+import numpy as np
+import os
+
+
+class clothing_article:
     def __init__(self, name, brand, in_wardrobe, date_bought):
         self.name = name
         self.brand = brand
         self.in_wardrobe = in_wardrobe
-
-
 
         # urls may need to be self entered...
         self.urls = []
@@ -25,3 +29,113 @@ class Clothing_Article:
 
         # tags may be able to be generated
         self.tags = []
+        self.text = []
+
+        # future properties may include
+        # self.materials = []
+        # self.size = []
+        # self.dimensions = []
+
+
+
+# tags can be represented as strings but also stored in a vector space to be compared to other tags
+
+# what libraries will I need for this project?
+# I'll need a library that can generate colors from images
+# choose one
+import colorgram
+
+
+# I want to be able to upload a url from a website such as amazon and have the images pulled from the website
+# choose a library that can do this
+import selenium
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+
+
+
+import requests
+
+# I want to be able to store the images in a database
+# choose a library that can do this
+import sqlite3
+
+# I want to use a neural network to generate tags
+# choose a library that can do this
+import tensorflow
+
+
+# lets first create the means to import images from a website
+# https://www.amazon.com/Alimens-Gentle-Button-Regular-Flannel/dp/B07CY3X5HS/ref=sr_1_26?crid=1DFMYPVKELYC&dib=eyJ2IjoiMSJ9.rTAQ5Xo1dpjvFCp3kV0tlHcn000Q4J3vyZbBf_G5TbMGgj-XNA-quB0xfhxTAPJrLqonUnEITVN2BrBjHv6tG7gCas9zVafOux2bCS_NXPnAW-Uhhz0K3qy57Psh3qw82oItOGtov3p-OO5mHsQRaxDBm6vqcbzetBVPxw9EIflcy2M_3eW6a3_tN0Y8l3XJG4KwdZdAaOEaLsOV-iiwvcfK8Rz6LRnhqZV8wvD_CILRhyfkd6oYhC66XsI6ucEtomzC9LRnYxtEsDA3NPpOEqn-92DrJxkBwzRtrUq3cjQ.p_EiLaW0Bku-Fng6V8hpz2pX6HxIBBAHLwM6fGzgcGk&dib_tag=se&keywords=shirt&qid=1732584529&sprefix=%2Caps%2C482&sr=8-26
+
+save_path = r'C:\Users\maxhi\OneDrive\Documents\GitHub\wardrobe_system\scraped_images'
+
+
+# I want to save it in a folder called scraped_images
+# set it using os
+os.makedirs(save_path, exist_ok=True)
+
+
+
+def get_images_from_url(url):
+    # I'll use selenium to get the images
+    driver = webdriver.Chrome()
+    driver.get(url)
+
+    # we'll start with just amazon
+
+    # store the photos and then return them
+    photos = []
+
+    # the photos are stored in the <img> tag
+    # <div id="imgTagWrapperId" class="imgTagWrapper">
+    
+    img_elements = driver.find_elements('img')
+    for img in img_elements:
+        photos.append(img.get_attribute('src'))
+
+    # Loop through the first num_images images
+    num_images = 3
+
+    # get the name of the item
+    item_name = driver.find_element(By.CSS_SELECTOR, 'span#productTitle').text
+    query = item_name.replace(" ", "_")
+
+    # get the brand of the item
+    item_brand = driver.find_element(By.CSS_SELECTOR, 'a#bylineInfo').text
+
+    # get the price of the item
+    item_price = driver.find_element(By.CSS_SELECTOR, 'span#priceblock_ourprice').text
+
+    
+
+    for i, img_element in enumerate(img_elements[:num_images]):
+        try:
+            # Click on each image to open it
+            img_element.click()
+
+            # Wait for the opened image to load
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'img.sFlh5c.pT0Scc.iPVvYb')))
+
+            # Get the URL of the opened image
+            img_url_element = driver.find_element(By.CSS_SELECTOR, 'img.sFlh5c.pT0Scc.iPVvYb')
+            img_url = img_url_element.get_attribute("src")
+
+            # Download the image
+            img_name = f"{query}_{i+1}.jpg"
+            img_path = os.path.join(save_path, img_name)
+            response = requests.get(img_url, stream=True)
+            with open(img_path, 'wb') as file:
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        file.write(chunk)
+            print(f"Image {i+1} downloaded successfully")
+
+        except Exception as e:
+            print(f"Failed to download image {i+1}: {e}")
+
+    return photos
+
+#get_images_from_url('https://www.amazon.com/Alimens-Gentle-Button-Regular-Flannel/dp/B07CY3X5HS/ref=sr_1_26?crid=1DFMYPVKELYC&dib=eyJ2IjoiMSJ9.rTAQ5Xo1dpjvFCp3kV0tlHcn000Q4J3vyZbBf_G5TbMGgj-XNA-quB0xfhxTAPJrLqonUnEITVN2BrBjHv6tG7gCas9zVafOux2bCS_NXPnAW-Uhhz0K3qy57Psh3qw82oItOGtov3p-OO5mHsQRaxDBm6vqcbzetBVPxw9EIflcy2M_3eW6a3_tN0Y8l3XJG4KwdZdAaOEaLsOV-iiwvcfK8Rz6LRnhqZV8wvD_CILRhyfkd6oYhC66XsI6ucEtomzC9LRnYxtEsDA3NPpOEqn-92DrJxkBwzRtrUq3cjQ.p_EiLaW0Bku-Fng6V8hpz2pX6HxIBBAHLwM6fGzgcGk&dib_tag=se&keywords=shirt&qid=1732584529&sprefix=%2Caps%2C482&sr=8-26')
